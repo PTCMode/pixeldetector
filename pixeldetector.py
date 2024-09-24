@@ -1,15 +1,33 @@
-import os, argparse, time
+import os, argparse, time, warnings
 from PIL import Image
 import numpy as np
 import scipy
 from itertools import product
 
+warnings.filterwarnings('ignore')
 ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--input", required = True, help = "Path to input image")
-ap.add_argument("-o", "--output", required = False, default="output.png", help = "Path to save output image")
-ap.add_argument("-m", "--max", required = False, type=int, default=128, help = "Max colors for computation, more = slower")
-ap.add_argument("-p", "--palette", required = False, action="store_true", help = "Automatically reduce the image to predicted color palette")
+ap.add_argument("-i", "--input", required = True, 
+                help = "Path to input image")
+ap.add_argument("-o", "--output", required = False, default="output.png", 
+                help = "Path to save output image")
+ap.add_argument("-m", "--max", required = False, type=int, default=128, 
+                help = "Max colors for computation, more = slower")
+ap.add_argument("-d", "--downscale", required = False, type=int, default=0, 
+                help = "Downscale factor for computation")
+ap.add_argument("-p", "--palette", required = False, action="store_true", 
+                help = "Automatically reduce the image to predicted color palette")
+ap.add_argument("-r", "--rescale", required = False, type=int, default=0, 
+                help = "Rescale factor after computation, rescale image to original(input = 0) or custom size")
 args = vars(ap.parse_args())
+
+def enlarge(image: Image, scale_factor: int):
+    image = image.convert("RGB")
+    # 计算新的尺寸
+    new_size = (image.width * scale_factor, image.height * scale_factor)
+
+    # 放大图像并保持硬边缘
+    enlarged_img = image.resize(new_size, resample=Image.NEAREST)
+    return enlarged_img
 
 def kCentroid(image: Image, width: int, height: int, centroids: int):
     image = image.convert("RGB")
@@ -64,6 +82,7 @@ def pixel_detect(image: Image):
     # Resize input image using kCentroid with the calculated horizontal and vertical factors
     return kCentroid(image, round(image.width/np.median(hspacing)), round(image.height/np.median(vspacing)), 2), np.median(hspacing), np.median(vspacing)
 
+#TODO: refactor this
 def determine_best_k(image: Image, max_k: int):
     # Convert the image to RGB mode
     image = image.convert("RGB")
@@ -103,7 +122,12 @@ if os.path.isfile(args["input"]):
     start = round(time.time()*1000)
 
     # Find 1:1 pixel scale
-    downscale, hf, vf = pixel_detect(image)
+    if args["downscale"] > 0:
+        hf = round(image.width/args["downscale"])
+        vf = round(image.height/args["downscale"])
+        downscale = kCentroid(image, hf, vf, 2)
+    else:
+        downscale, hf, vf = pixel_detect(image)
 
     print(f"Size detected and reduced from {image.width}x{image.height} to {downscale.width}x{downscale.height} in {round(time.time()*1000)-start} milliseconds")
 
@@ -120,4 +144,10 @@ if os.path.isfile(args["input"]):
 
         print(f"Palette reduced to {best_k} colors in {round(time.time()*1000)-start} milliseconds")
     
+    if args["rescale"] > 1:
+        output = enlarge(output, args["rescale"])
+    elif args["rescale"] == 0:
+        output = enlarge(output, scale)
+
+
     output.save(args["output"])
