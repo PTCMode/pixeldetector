@@ -80,7 +80,26 @@ def pixel_detect(image: Image):
     vspacing = np.diff(vpeaks)
 
     # Resize input image using kCentroid with the calculated horizontal and vertical factors
-    return kCentroid(image, round(image.width/np.median(hspacing)), round(image.height/np.median(vspacing)), 2), np.median(hspacing), np.median(vspacing)
+    return kCentroid(image, round(image.width/np.median(hspacing)), round(image.height/np.median(vspacing)), 2), \
+            round(np.median(hspacing)), round(np.median(vspacing))
+
+#TODO:
+def transparence2white(image):
+    # 确保图像有alpha通道
+    image = image.convert("RGBA")
+    datas = image.getdata()
+
+    new_data = []
+    for item in datas:
+        # 检查alpha通道，如果为0（完全透明），则将其改为白色
+        if item[3] == 0:
+            new_data.append((255, 255, 255, 255))  # 白色
+        else:
+            new_data.append(item)
+
+    # 更新图像数据
+    image.putdata(new_data)
+    return image
 
 #TODO: refactor this
 def determine_best_k(image: Image, max_k: int):
@@ -125,7 +144,7 @@ if os.path.isfile(args["input"]):
     if args["downscale"] > 0:
         hf = round(image.width/args["downscale"])
         vf = round(image.height/args["downscale"])
-        downscale = kCentroid(image, hf, vf, 2)
+        downscale = kCentroid(image, hf, vf, 2) if args["downscale"] != 1 else image
     else:
         downscale, hf, vf = pixel_detect(image)
 
@@ -146,7 +165,7 @@ if os.path.isfile(args["input"]):
     
     if args["rescale"] > 1:
         output = enlarge(output, args["rescale"])
-    elif args["rescale"] == 0:
+    elif args["rescale"] == 0 and args["downscale"] > 0:
         output = enlarge(output, scale)
 
 
